@@ -5,8 +5,16 @@ import { MongoClient, ObjectId } from "mongodb";
 import joi from "joi";
 import dayjs from "dayjs";
 
-const emailsSchema = joi.object({
-    email: joi.string().required().email()
+const validacaoSchema = joi.object({
+    email: joi.string().required().email(),
+    name: joi.string().required(),
+})
+
+const transactionSchema = joi.object({
+    id: joi.string().required(),
+    value: joi.number().required(),
+    description: joi.string().required().min(3),
+    type: joi.string().valid("entrada", "saida").required()
 })
 
 const app = express()
@@ -31,9 +39,9 @@ app.post("/login", async (req, res) => {
     const { email } = req.body
     const { password } = req.headers
     console.log(password)
-   
 
-    const validation = emailsSchema.validate({ email }, { abortEarly: false })
+
+    const validation = validacaoSchema.validate({ email }, { abortEarly: false })
 
     if (validation.error) {
         const erros = validation.error.details.map((detail) => detail.message)
@@ -42,14 +50,15 @@ app.post("/login", async (req, res) => {
     }
 
     try {
-        const user = await collectionUser.findOne({email})    
-         console.log(user)
+        const user = await collectionUser.findOne({ email })
+        console.log(user)
 
         if (user != null) {
             if (user.password === password) {
                 res.send({
-                    id: user. _id.toString(),
-                    name: user.name})
+                    id: user._id.toString(),
+                    name: user.name
+                })
 
             } else {
                 res.status(401).send("Não autotizado")
@@ -66,6 +75,74 @@ app.post("/login", async (req, res) => {
 
 })
 
+app.post("/usuarios", async (req, res) => {
+    const { name, email, password, confirmedPassword } = req.body
+
+    const validation = validacaoSchema.validate({ email, name }, { abortEarly: false })
+
+    if (validation.error) {
+        const erros = validation.error.details.map((detail) => detail.message)
+        res.status(422).send(erros)
+        return;
+    }
+
+    try {
+        const user = await collectionUser.findOne({ email })
+
+        if (user != null) {
+            res.status(409).send("email já cadastrado!")
+            return;
+        }
+
+        if (password != confirmedPassword) {
+            res.status(400).send("senhas diferentes")
+            return;
+        }
+
+        await collectionUser.insertOne({ name, email, password })
+        res.sendStatus(201)
+
+
+    } catch (error) {
+        console.log(error)
+        res.sendStatus(500)
+    }
+
+
+
+
+})
+
+app.post("/transaction", async (req, res) => {
+    const { id ,value, description, type } = req.body
+
+    const validation = transactionSchema.validate({ id, value, description, type }, { abortEarly: false })
+
+    if (validation.error) {
+        const erros = validation.error.details.map((detail) => detail.message)
+        res.status(422).send(erros)
+        return;
+    }
+
+    try {
+        const transaction = {
+            id: req.body.id,
+            value: req.body.value,
+            description: req.body.description,
+            type: req.body.type,
+            date: (dayjs().format('DD/MM'))
+        }
+         await collectionTransaction.insertOne(transaction)
+
+    } catch (error) {
+        console.log(error)
+        res.sendStatus(500)
+    }
+
+
+
+
+})
 
 app.listen(5000, console.log("Server running in port: 5000"))
 
