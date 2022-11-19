@@ -11,7 +11,6 @@ const validacaoSchema = joi.object({
 })
 
 const transactionSchema = joi.object({
-    id: joi.string().required(),
     value: joi.number().required(),
     description: joi.string().required().min(3),
     type: joi.string().valid("entrada", "saida").required()
@@ -33,7 +32,7 @@ try {
 
 const db = mongoClient.db("myWallet");
 const collectionUser = db.collection("user")
-const collectionTransaction = db.collection("transactions")
+const collectionTransaction = db.collection("transaction")
 
 app.post("/login", async (req, res) => {
     const { email } = req.body
@@ -114,9 +113,11 @@ app.post("/usuarios", async (req, res) => {
 })
 
 app.post("/transaction", async (req, res) => {
-    const { id ,value, description, type } = req.body
+    const { value, description, type } = req.body
+    const { id } = req.headers
+  
 
-    const validation = transactionSchema.validate({ id, value, description, type }, { abortEarly: false })
+    const validation = transactionSchema.validate({ value, description, type }, { abortEarly: false })
 
     if (validation.error) {
         const erros = validation.error.details.map((detail) => detail.message)
@@ -125,22 +126,40 @@ app.post("/transaction", async (req, res) => {
     }
 
     try {
+        const user = await collectionUser.findOne({ _id: ObjectId(id) })
+        if (!user) {
+            res.send("usuario n existe")
+            return;
+        }
+
         const transaction = {
-            id: req.body.id,
+            userId: id,
             value: req.body.value,
             description: req.body.description,
             type: req.body.type,
             date: (dayjs().format('DD/MM'))
         }
-         await collectionTransaction.insertOne(transaction)
+        await collectionTransaction.insertOne(transaction)
+        res.status(201).send("cadastrado com sucesso")
 
     } catch (error) {
         console.log(error)
         res.sendStatus(500)
     }
 
+})
 
+app.get("/transaction", async (req, res) => {
+    const { id } = req.headers
 
+    try {
+        const transactions = await collectionTransaction.find({userId:id}).toArray()
+        res.send(transactions)
+       
+    } catch (err) {
+        console.log(err)
+        res.sendStatus(500)
+    }
 
 })
 
